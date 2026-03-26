@@ -1,0 +1,8 @@
+[project]
+name = "cfdp-opencan-2"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "canopen>=2.4.1",
+    "cfdp-py==0.1.2",
+]
