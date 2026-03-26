@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """CFDP file transfer over CANopen SDO: fault handler, check timer, user callbacks, and OD factory."""
 
 from __future__ import annotations
@@ -40,8 +39,6 @@ CFDP_PDU_OD_INDEX = 0x2000
 
 
 # CFDP fault handler, timer, user
-
-
 class LogFaults(DefaultFaultHandlerBase):
     def __init__(self, name: str):
         super().__init__()

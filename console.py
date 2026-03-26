@@ -28,7 +28,6 @@ class NodeConsole(cmd.Cmd):
         )
 
     # Commands
-
     def do_put(self, args: str):
         """put <dest_entity_id> <source_file> [<dest_file>]"""
         parts = args.split()

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -9,7 +8,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional  # noqa: type annotations
+from typing import Optional
 
 import can
 import canopen
@@ -126,15 +125,15 @@ class LiveEntity:
         self._inbox: collections.deque[bytes] = collections.deque()
         self._lock = threading.Lock()
 
-    # SDO server callback
 
+    # SDO server callback
     def _on_od_write(self, index: int, subindex: int, od, data: bytes):
         if index == CFDP_PDU_OD_INDEX:
             with self._lock:
                 self._inbox.append(bytes(data))
 
-    # PDU routing
 
+    # PDU routing
     def _send_raw_pdu(self, dest_entity_id: int, raw: bytes):
         rnode = self._remote_nodes.get(dest_entity_id)
         if rnode is None:
@@ -144,6 +143,7 @@ class LiveEntity:
             rnode.sdo[CFDP_PDU_OD_INDEX].raw = raw
         except Exception:
             log.exception("[%s] SDO write to entity %d failed", self.name, dest_entity_id)
+
 
     def _collect_outgoing(self, handler) -> list[tuple[int, bytes]]:
         """Drain packets from handler. Must hold self._lock; send after releasing."""
@@ -163,10 +163,12 @@ class LiveEntity:
             outgoing.append((target_eid, raw))
         return outgoing
 
+
     def _send_collected(self, outgoing: list[tuple[int, bytes]]):
         """Send collected PDUs over CAN (no lock held)."""
         for target_eid, raw in outgoing:
             self._send_raw_pdu(target_eid, raw)
+
 
     def _process_one_incoming(self, raw: bytes):
         pdu = PduFactory.from_raw(raw)
@@ -185,8 +187,8 @@ class LiveEntity:
                 outgoing = self._collect_outgoing(self.source)
         self._send_collected(outgoing)
 
-    # Public API
 
+    # Public API
     @property
     def peer_ids(self) -> list[int]:
         return sorted(self._remote_nodes.keys())
@@ -225,11 +227,12 @@ class LiveEntity:
         self.bus.shutdown()
 
 
+
 _RED    = "\033[1;31m"
 _RESET  = "\033[0m"
 
-# Entry point
 
+# Entry point
 def main():
     parser = argparse.ArgumentParser(description="CFDP-over-CANopen node")
     parser.add_argument("entity_id", type=int, help="This node's entity ID (1, 2, ...)")
@@ -272,7 +275,7 @@ def main():
         print(f"{_RED}Failed to connect: {exc}{_RESET}")
         if args.interface == "socketcan":
             print()
-            print("  Tip: bring up vcan0 first:")
+            print("  Bring up vcan0 first:")
             print("       sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0")
             print()
             print("  Or use the in-process virtual bus (single terminal only):")
