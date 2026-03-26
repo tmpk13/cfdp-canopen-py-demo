@@ -1,18 +1,35 @@
 from __future__ import annotations
 
 import cmd
+import sys
 from pathlib import Path
 
 from cfdppy import CfdpState
 
 from cfdp_node import LiveEntity
 
-_RESET  = "\033[0m"
-_BOLD   = "\033[1m"
-_CYAN   = "\033[1;36m"
-_GREEN  = "\033[1;32m"
-_YELLOW = "\033[1;33m"
-_RED    = "\033[1;31m"
+_USE_COLOR = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+if _USE_COLOR:
+    _RESET  = "\033[0m"
+    _BOLD   = "\033[1m"
+    _CYAN   = "\033[1;36m"
+    _GREEN  = "\033[1;32m"
+    _YELLOW = "\033[1;33m"
+    _RED    = "\033[1;31m"
+    # Readline markers: \001 and \002 prevent prompt breaking after output
+    _RL_START = "\001"
+    _RL_END   = "\002"
+else:
+    _RESET = _BOLD = _CYAN = _GREEN = _YELLOW = _RED = ""
+    _RL_START = _RL_END = ""
+
+
+def _rl(code: str) -> str:
+    """Wrap an ANSI code in readline ignore markers (for use in prompts only)."""
+    if not code:
+        return ""
+    return f"{_RL_START}{code}{_RL_END}"
 
 
 class NodeConsole(cmd.Cmd):
@@ -20,7 +37,7 @@ class NodeConsole(cmd.Cmd):
     def __init__(self, entity: LiveEntity):
         super().__init__()
         self.entity = entity
-        self.prompt = f"{_CYAN}Entity-{entity.entity_id}{_RESET}> "
+        self.prompt = f"{_rl(_CYAN)}Entity-{entity.entity_id}{_rl(_RESET)}> "
         self.intro = (
             f"\n{_BOLD}  CFDP-over-CANopen  |  Entity {entity.entity_id}{_RESET}\n"
             f"  Peers: {entity.peer_ids}\n"

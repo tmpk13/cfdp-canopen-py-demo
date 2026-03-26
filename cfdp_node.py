@@ -22,7 +22,6 @@ from cfdp_canopen import (
 )
 from cfdppy import (
     CfdpState,
-    HostFilestore,
     PacketDestination,
     PutRequest,
     get_packet_destination,
@@ -100,7 +99,7 @@ class LiveEntity:
             for eid in peer_ids
         ]
         remote_table = RemoteEntityCfgTable(remote_cfgs)
-        self.user = SimpleCfdpUser(self.name, HostFilestore())
+        self.user = SimpleCfdpUser(self.name)
         local_cfg = LocalEntityCfg(
             local_entity_id=self.eid,
             indication_cfg=IndicationCfg(),
@@ -228,8 +227,9 @@ class LiveEntity:
 
 
 
-_RED    = "\033[1;31m"
-_RESET  = "\033[0m"
+_USE_COLOR = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+_RED    = "\033[1;31m" if _USE_COLOR else ""
+_RESET  = "\033[0m" if _USE_COLOR else ""
 
 
 # Entry point
