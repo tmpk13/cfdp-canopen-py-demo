@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import collections
 import logging
-import os
 import sys
 import threading
 import time
@@ -26,15 +25,14 @@ from cfdppy import (
     PutRequest,
     get_packet_destination,
 )
+from cfdppy.handler.dest import DestHandler
+from cfdppy.handler.source import SourceHandler
 from cfdppy.mib import (
-    IndicationCfg,
-    LocalEntityCfg,
-    RemoteEntityCfg,
-    RemoteEntityCfgTable,
+    IndicationConfig,
+    LocalEntityConfig,
+    RemoteEntityConfig,
+    RemoteEntityConfigTable,
 )
-# OreSat's patched CFDP handlers
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "oresat-c3-software"))
-from oresat_c3.protocols.cfdp import FixedDestHandler as DestHandler, VfsSourceHandler as SourceHandler
 from spacepackets.cfdp import (
     ChecksumType,
     Direction,
@@ -87,7 +85,7 @@ class LiveEntity:
 
         # CFDP setup
         remote_cfgs = [
-            RemoteEntityCfg(
+            RemoteEntityConfig(
                 entity_id=ByteFieldU16(eid),
                 max_file_segment_len=48,
                 max_packet_len=128,
@@ -98,11 +96,11 @@ class LiveEntity:
             )
             for eid in peer_ids
         ]
-        remote_table = RemoteEntityCfgTable(remote_cfgs)
+        remote_table = RemoteEntityConfigTable(remote_cfgs)
         self.user = SimpleCfdpUser(self.name)
-        local_cfg = LocalEntityCfg(
+        local_cfg = LocalEntityConfig(
             local_entity_id=self.eid,
-            indication_cfg=IndicationCfg(),
+            indication_cfg=IndicationConfig(),
             default_fault_handlers=LogFaults(self.name),
         )
         timer_prov = DefaultCheckTimer()
@@ -177,12 +175,10 @@ class LiveEntity:
         dest = get_packet_destination(pdu)
         with self._lock:
             if dest == PacketDestination.DEST_HANDLER:
-                self.dest.insert_packet(pdu)
-                self.dest.state_machine()
+                self.dest.state_machine(packet=pdu)
                 outgoing = self._collect_outgoing(self.dest)
             else:
-                self.source.insert_packet(pdu)
-                self.source.state_machine()
+                self.source.state_machine(packet=pdu)
                 outgoing = self._collect_outgoing(self.source)
         self._send_collected(outgoing)
 

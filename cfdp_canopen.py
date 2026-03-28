@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from datetime import timedelta
 from pathlib import Path
@@ -38,13 +37,6 @@ from spacepackets.countdown import Countdown
 log = logging.getLogger("cfdp-canopen")
 
 CFDP_PDU_OD_INDEX = 0x2000
-
-
-class StatHostFilestore(HostFilestore):
-    """HostFilestore with a stat() method, needed by VfsSourceHandler."""
-
-    def stat(self, path: Path) -> os.stat_result:
-        return path.stat()
 
 
 # CFDP fault handler, timer, user
@@ -86,7 +78,7 @@ class SimpleCfdpUser(CfdpUserBase):
     """Logs CFDP indications and signals transfer completion."""
 
     def __init__(self, name: str, vfs=None):
-        super().__init__(vfs or StatHostFilestore())
+        super().__init__(vfs or HostFilestore())
         self.name = name
         self._finished_events: dict[TransactionId, threading.Event] = {}
         self._lock = threading.Lock()
