@@ -87,8 +87,8 @@ class LiveEntity:
         remote_cfgs = [
             RemoteEntityConfig(
                 entity_id=ByteFieldU16(eid),
-                max_file_segment_len=48,
-                max_packet_len=128,
+                max_file_segment_len=512,
+                max_packet_len=512,
                 closure_requested=True,
                 crc_on_transmission=False,
                 default_transmission_mode=TransmissionMode.ACKNOWLEDGED,
@@ -285,7 +285,7 @@ def main():
     def _stepper():
         while not stop_event.is_set():
             entity.step()
-            time.sleep(0.01)  # 100 Hz
+            time.sleep(0.002)
 
     stepper_thread = threading.Thread(target=_stepper, daemon=True, name="cfdp-step")
     stepper_thread.start()
