@@ -6,3 +6,8 @@ dependencies = [
     "canopen>=2.4.1",
     "cfdp-py>=0.6.0,<0.7",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

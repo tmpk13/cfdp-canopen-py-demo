@@ -69,6 +69,7 @@ class NodeConsole(cmd.Cmd):
             print(f"{_YELLOW}Warning: source handler is busy — wait for the current transfer to finish{_RESET}")
             return
         print(f"{_GREEN}Sending {src} -> entity {dest_id}:{dst}{_RESET}")
+        self.entity.user.set_pending_file_size(src.stat().st_size)
         self.entity.put_file(dest_id, src, dst)
 
     def do_cat(self, args: str):
@@ -137,7 +138,13 @@ class NodeConsole(cmd.Cmd):
         print(f"Waiting for transfer to finish (timeout {timeout}s) ...")
         ok = self.entity.user.finished_event(tid).wait(timeout)
         if ok:
-            print(f"{_GREEN}Transfer finished.{_RESET}")
+            result = self.entity.user.get_transfer_speed(tid)
+            if result is not None:
+                elapsed, size = result
+                from cfdp_canopen import SimpleCfdpUser
+                print(f"{_GREEN}Transfer finished: {SimpleCfdpUser._format_speed(size, elapsed)}{_RESET}")
+            else:
+                print(f"{_GREEN}Transfer finished.{_RESET}")
         else:
             print(f"{_YELLOW}Timed out waiting.{_RESET}")
 
