@@ -210,7 +210,7 @@ class LiveEntity:
                 self.dest.state_machine()
                 outgoing.extend(self._collect_outgoing(self.dest))
         self._send_collected(outgoing)
-        for _ in range(64):  # cap per tick
+        for _ in range(256):  # cap per tick
             with self._lock:
                 if not self._inbox:
                     break
@@ -285,7 +285,7 @@ def main():
     def _stepper():
         while not stop_event.is_set():
             entity.step()
-            time.sleep(0.002)
+            time.sleep(0.0001)
 
     stepper_thread = threading.Thread(target=_stepper, daemon=True, name="cfdp-step")
     stepper_thread.start()
