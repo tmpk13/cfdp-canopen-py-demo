@@ -54,10 +54,12 @@ class LiveEntity:
         total_entities: int,
         can_interface: str,
         can_channel: str,
+        block_transfer: bool = False,
     ):
         self.entity_id = entity_id
         self.name = f"Entity-{entity_id}"
         self.eid = ByteFieldU16(entity_id)
+        self._block_transfer = block_transfer
 
         peer_ids = [i for i in range(1, total_entities + 1) if i != entity_id]
 
@@ -87,9 +89,9 @@ class LiveEntity:
         remote_cfgs = [
             RemoteEntityConfig(
                 entity_id=ByteFieldU16(eid),
-                max_file_segment_len=512,
-                max_packet_len=512,
-                closure_requested=True,
+                max_file_segment_len=1024,
+                max_packet_len=1024,
+                closure_requested=False,
                 crc_on_transmission=False,
                 default_transmission_mode=TransmissionMode.ACKNOWLEDGED,
                 crc_type=ChecksumType.CRC_32,
@@ -137,7 +139,13 @@ class LiveEntity:
             log.error("[%s] No route to entity %d", self.name, dest_entity_id)
             return
         try:
-            rnode.sdo[CFDP_PDU_OD_INDEX].raw = raw
+            if self._block_transfer:
+                with rnode.sdo[CFDP_PDU_OD_INDEX].open(
+                    "wb", size=len(raw), block_transfer=True
+                ) as fp:
+                    fp.write(raw)
+            else:
+                rnode.sdo[CFDP_PDU_OD_INDEX].raw = raw
         except Exception:
             log.exception("[%s] SDO write to entity %d failed", self.name, dest_entity_id)
 
@@ -194,7 +202,7 @@ class LiveEntity:
             source_file=src_path,
             dest_file=dst_path,
             trans_mode=TransmissionMode.ACKNOWLEDGED,
-            closure_requested=True,
+            closure_requested=False,
         )
         log.info("[%s] PUT %s -> entity %d:%s", self.name, src_path, dest_entity_id, dst_path)
         with self._lock:
@@ -244,6 +252,10 @@ def main():
         "--channel", default="vcan0",
         help="CAN channel / device (default: vcan0)",
     )
+    parser.add_argument(
+        "--block-transfer", action="store_true",
+        help="Use SDO block transfer instead of segmented (faster, requires patched server)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args()
 
@@ -259,6 +271,10 @@ def main():
     if args.entity_id < 1 or args.entity_id > args.total:
         parser.error(f"entity_id must be between 1 and --total ({args.total})")
 
+    if args.block_transfer:
+        import sdo_block_patch
+        sdo_block_patch.apply()
+
     print(f"Connecting to {args.interface}:{args.channel} ...")
     try:
         entity = LiveEntity(
@@ -266,6 +282,7 @@ def main():
             total_entities=args.total,
             can_interface=args.interface,
             can_channel=args.channel,
+            block_transfer=args.block_transfer,
         )
     except Exception as exc:
         print(f"{_RED}Failed to connect: {exc}{_RESET}")
