@@ -13,3 +13,4 @@ Inside the terminal: `put <target-node-#> <file-name/path> [dest-path/name]`
 
 
 Optional block transfer for faster speeds `cfdp_node.py 1 --block-transfer` 
+

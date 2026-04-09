@@ -14,6 +14,7 @@ import canopen
 
 from cfdp_canopen import (
     CFDP_PDU_OD_INDEX,
+    ProxyPutUser,
     SimpleCfdpUser,
     LogFaults,
     DefaultCheckTimer,
@@ -38,7 +39,9 @@ from spacepackets.cfdp import (
     Direction,
     TransmissionMode,
 )
+from spacepackets.cfdp.lv import CfdpLv
 from spacepackets.cfdp.pdu import PduFactory, PduHolder
+from spacepackets.cfdp.tlv import ProxyPutRequest, ProxyPutRequestParams
 from spacepackets.seqcount import SeqCountProvider
 from spacepackets.util import ByteFieldU16
 
@@ -55,6 +58,7 @@ class LiveEntity:
         can_interface: str,
         can_channel: str,
         block_transfer: bool = False,
+        user: SimpleCfdpUser | None = None,
     ):
         self.entity_id = entity_id
         self.name = f"Entity-{entity_id}"
@@ -99,7 +103,7 @@ class LiveEntity:
             for eid in peer_ids
         ]
         remote_table = RemoteEntityConfigTable(remote_cfgs)
-        self.user = SimpleCfdpUser(self.name)
+        self.user = user or ProxyPutUser(self.name)
         local_cfg = LocalEntityConfig(
             local_entity_id=self.eid,
             indication_cfg=IndicationConfig(),
@@ -122,7 +126,7 @@ class LiveEntity:
         )
 
         self._inbox: collections.deque[bytes] = collections.deque()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
 
     # SDO server callback
@@ -208,6 +212,34 @@ class LiveEntity:
         with self._lock:
             self.source.put_request(req)
 
+    def put_file_request(self, req: PutRequest):
+        """Submit a pre-built PutRequest (e.g. with proxy TLVs)."""
+        with self._lock:
+            self.source.put_request(req)
+
+    def proxy_put(self, relay_entity_id: int, final_dest_id: int,
+                  src_path: Path, dst_path: Path):
+        """Ask relay_entity_id to send src_path to final_dest_id:dst_path."""
+        proxy_tlv = ProxyPutRequest(ProxyPutRequestParams(
+            dest_entity_id=ByteFieldU16(final_dest_id),
+            source_file_name=CfdpLv.from_path(src_path),
+            dest_file_name=CfdpLv.from_path(dst_path),
+        ))
+        req = PutRequest(
+            destination_id=ByteFieldU16(relay_entity_id),
+            source_file=None,
+            dest_file=None,
+            trans_mode=TransmissionMode.UNACKNOWLEDGED,
+            closure_requested=False,
+            msgs_to_user=[proxy_tlv.to_generic_msg_to_user_tlv()],
+        )
+        log.info(
+            "[%s] Proxy put: ask entity %d to send %s -> entity %d:%s",
+            self.name, relay_entity_id, src_path, final_dest_id, dst_path,
+        )
+        with self._lock:
+            self.source.put_request(req)
+
     def step(self):
         with self._lock:
             outgoing: list[tuple[int, bytes]] = []
@@ -224,6 +256,10 @@ class LiveEntity:
                     break
                 raw = self._inbox.popleft()
             self._process_one_incoming(raw)
+        # Relay any queued proxy puts (outside the handler lock)
+        if isinstance(self.user, ProxyPutUser):
+            for dest_eid, src, dst in self.user.pop_pending_proxy_puts():
+                self.put_file(dest_eid, src, dst)
 
     def shutdown(self):
         self.network.disconnect()

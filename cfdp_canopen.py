@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 from datetime import timedelta
+from pathlib import Path
 from canopen import ObjectDictionary
 from canopen.objectdictionary import ODRecord, ODVariable
 from canopen.objectdictionary.datatypes import DOMAIN, UNSIGNED8, UNSIGNED32
@@ -189,6 +190,55 @@ class SimpleCfdpUser(CfdpUserBase):
 
     def eof_recv_indication(self, transaction_id: TransactionId):
         self._log_indication("EOF Recv", transaction_id=transaction_id)
+
+
+class ProxyPutUser(SimpleCfdpUser):
+    """Extends SimpleCfdpUser to relay incoming proxy put requests.
+
+    When metadata arrives with ProxyPutRequest TLVs, the relay parameters are
+    queued.  The owning entity should call :meth:`pop_pending_proxy_puts` from
+    its step loop to issue the forwarded transfers outside any held locks.
+    """
+
+    def __init__(self, name: str, vfs=None):
+        super().__init__(name, vfs)
+        self._pending_proxy: list[tuple[int, Path, Path]] = []
+        self._proxy_lock = threading.Lock()
+
+    @property
+    def pending_proxy_puts(self) -> list[tuple[int, Path, Path]]:
+        with self._proxy_lock:
+            return list(self._pending_proxy)
+
+    def pop_pending_proxy_puts(self) -> list[tuple[int, Path, Path]]:
+        """Return and clear queued proxy puts (called from the step loop)."""
+        with self._proxy_lock:
+            items = list(self._pending_proxy)
+            self._pending_proxy.clear()
+            return items
+
+    def metadata_recv_indication(self, params: MetadataRecvParams):
+        super().metadata_recv_indication(params)
+        if not params.msgs_to_user:
+            return
+        for msg in params.msgs_to_user:
+            if not msg.is_reserved_cfdp_message():
+                continue
+            reserved = msg.to_reserved_msg_tlv()
+            if reserved is None:
+                continue
+            proxy_params = reserved.get_proxy_put_request_params()
+            if proxy_params is None:
+                continue
+            dest_eid = proxy_params.dest_entity_id.value
+            src_file = proxy_params.source_file_as_path
+            dst_file = proxy_params.dest_file_as_path
+            log.info(
+                "[%s] Proxy put request: %s -> entity %d:%s",
+                self.name, src_file, dest_eid, dst_file,
+            )
+            with self._proxy_lock:
+                self._pending_proxy.append((dest_eid, src_file, dst_file))
 
 
 # CANopen Object Dictionary for CFDP transport

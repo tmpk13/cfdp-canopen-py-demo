@@ -72,6 +72,34 @@ class NodeConsole(cmd.Cmd):
         self.entity.user.set_pending_file_size(src.stat().st_size)
         self.entity.put_file(dest_id, src, dst)
 
+    def do_proxy_put(self, args: str):
+        """proxy_put <relay_entity_id> <final_dest_id> <source_file> [<dest_file>]"""
+        parts = args.split()
+        if len(parts) < 3:
+            print("Usage: proxy_put <relay_entity_id> <final_dest_id> <source_file> [<dest_file>]")
+            return
+        try:
+            relay_id = int(parts[0])
+            final_id = int(parts[1])
+        except ValueError:
+            print(f"{_RED}Error: relay_id and final_dest_id must be integers{_RESET}")
+            return
+        src = Path(parts[2])
+        dst = Path(parts[3]) if len(parts) >= 4 else Path(f"/tmp/recv_{src.name}")
+        if not src.exists():
+            print(f"{_RED}Error: {src} does not exist{_RESET}")
+            return
+        for eid in (relay_id, final_id):
+            if eid not in self.entity.peer_ids:
+                print(f"{_RED}Error: entity {eid} is not a known peer{_RESET}")
+                print(f"  Known peers: {self.entity.peer_ids}")
+                return
+        if self.entity.source.state != CfdpState.IDLE:
+            print(f"{_YELLOW}Warning: source handler is busy — wait for the current transfer to finish{_RESET}")
+            return
+        print(f"{_GREEN}Proxy put: asking entity {relay_id} to send {src} -> entity {final_id}:{dst}{_RESET}")
+        self.entity.proxy_put(relay_id, final_id, src, dst)
+
     def do_cat(self, args: str):
         """cat <path>"""
         if not args:
